@@ -203,7 +203,7 @@ def main():
         cache_dir=model_args.cache_dir,
         token=data_args.token,
         trust_remote_code=data_args.trust_remote_code,
-        use_fast=model_args.use_fast_tokenizer,
+        #use_fast=model_args.use_fast_tokenizer,
         padding_side=model_args.prompt_padding_side,
     )
 
@@ -213,7 +213,7 @@ def main():
         cache_dir=model_args.cache_dir,
         token=data_args.token,
         trust_remote_code=data_args.trust_remote_code,
-        use_fast=model_args.use_fast_tokenizer,
+        #use_fast=model_args.use_fast_tokenizer,
     )
 
     if model_args.use_fast_tokenizer:
