@@ -433,17 +433,33 @@ def main():
         def apply_audio_decoder(batch):
             len_audio = batch.pop("len_audio")
             audio_decoder.to(batch["input_values"].device).eval()
-            if bandwidth is not None:
-                batch["bandwidth"] = bandwidth
-            elif "num_quantizers" in encoder_signature:
-                batch["num_quantizers"] = num_codebooks
-            elif "num_codebooks" in encoder_signature:
-                batch["num_codebooks"] = num_codebooks
-            elif "n_quantizers" in encoder_signature:
-                batch["n_quantizers"] = num_codebooks
 
             with torch.no_grad():
-                labels = audio_decoder.encode(**batch)["audio_codes"]
+                # Dynamically select arguments for the audio encoder's encode method
+                # This makes the script compatible with different versions of DAC/Encodec
+                encode_signature = set(inspect.signature(audio_decoder.encode).parameters)
+                encode_kwargs = {}
+
+                # 1. Handle padding mask
+                padding_mask = batch.pop("padding_mask", None)
+                if "padding_mask" in encode_signature and padding_mask is not None:
+                    encode_kwargs["padding_mask"] = padding_mask
+
+                # 2. Handle bandwidth and codebook arguments
+                if "bandwidth" in encode_signature and bandwidth is not None:
+                    encode_kwargs["bandwidth"] = bandwidth
+                elif "num_quantizers" in encode_signature:
+                    encode_kwargs["num_quantizers"] = num_codebooks
+                elif "num_codebooks" in encode_signature:
+                    encode_kwargs["num_codebooks"] = num_codebooks
+                elif "n_quantizers" in encode_signature:
+                    encode_kwargs["n_quantizers"] = num_codebooks
+                elif "n_codebooks" in encode_signature:
+                    encode_kwargs["n_codebooks"] = num_codebooks
+
+                # The remaining items in `batch` should be the input values/features
+                labels = audio_decoder.encode(**batch, **encode_kwargs)["audio_codes"]
+
             output = {}
             output["len_audio"] = len_audio
             # (1, bsz, codebooks, seq_len) -> (bsz, seq_len, codebooks)
