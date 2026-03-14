@@ -1089,21 +1089,29 @@ def main():
                     prefix="train",
                 )
 
-            # save checkpoint and weights after each save_steps and at the end of training
-            if (cur_step % training_args.save_steps == 0) or cur_step == total_train_steps:
+            ## save checkpoint and weights after each save_steps and at the end of training
+            #if (cur_step % training_args.save_steps == 0) or cur_step == total_train_steps:
+
+            # save checkpoint and weights at the end of each epoch and at the end of training
+            if (update_step == total_updates - 1) or cur_step == total_train_steps:
                 intermediate_dir = os.path.join(training_args.output_dir, f"checkpoint-{cur_step}-epoch-{epoch}")
                 # safe_serialization=False to avoid shared tensors saving issue (TODO(YL): it's a temporary fix)
                 # https://github.com/huggingface/transformers/issues/27293#issuecomment-1872560074
                 accelerator.save_state(output_dir=intermediate_dir, safe_serialization=False)
                 accelerator.wait_for_everyone()
+
                 if accelerator.is_main_process:
+                    unwrapped_model = accelerator.unwrap_model(model)
+                    unwrapped_model.save_pretrained(intermediate_dir)
+                    feature_extractor.save_pretrained(intermediate_dir)
+                    prompt_tokenizer.save_pretrained(intermediate_dir)
+
                     rotate_checkpoints(
                         training_args.save_total_limit, output_dir=training_args.output_dir, logger=logger
                     )
 
                     if cur_step == total_train_steps:
                         # un-wrap student model for save
-                        unwrapped_model = accelerator.unwrap_model(model)
                         unwrapped_model.save_pretrained(training_args.output_dir)
 
                     if training_args.push_to_hub:
