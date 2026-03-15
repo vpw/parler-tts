@@ -87,7 +87,16 @@ def main():
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
     send_example_telemetry("run_parler_tts", model_args, data_args)
 
-    if training_args.save_steps is not None and training_args.save_epochs is not None:
+    # -- Priority for epoch-based saving --
+    # If save_epochs is set, we prioritize it over save_steps.
+    if training_args.save_epochs is not None:
+        # Set save_steps to a very large number to effectively disable it.
+        # We don't set it to None because the validation check for `eval_steps`
+        # might rely on it being an integer.
+        training_args.save_steps = sys.maxsize
+        logger.info(f"User specified --save_epochs. Prioritizing epoch-based saving and disabling step-based saving.")
+
+    if training_args.save_steps is not None and training_args.save_epochs is not None and training_args.save_steps != sys.maxsize:
         raise ValueError("You cannot specify both `save_steps` and `save_epochs`. Please choose one.")
 
     if training_args.dtype == "float16":
