@@ -87,6 +87,9 @@ def main():
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
     send_example_telemetry("run_parler_tts", model_args, data_args)
 
+    if training_args.save_steps is not None and training_args.save_epochs is not None:
+        raise ValueError("You cannot specify both `save_steps` and `save_epochs`. Please choose one.")
+
     if training_args.dtype == "float16":
         mixed_precision = "fp16"
         torch_dtype = torch.float16
@@ -1001,6 +1004,36 @@ def main():
         output_audios = accelerator.pad_across_processes(output_audios, dim=1, pad_index=0)
         return output_audios
 
+    def save_checkpoint(epoch, step):
+        intermediate_dir = os.path.join(training_args.output_dir, f"checkpoint-{step}-epoch-{epoch}")
+        # safe_serialization=False to avoid shared tensors saving issue (TODO(YL): it's a temporary fix)
+        # https://github.com/huggingface/transformers/issues/27293#issuecomment-1872560074
+        accelerator.save_state(output_dir=intermediate_dir, safe_serialization=False)
+        accelerator.wait_for_everyone()
+
+        if accelerator.is_main_process:
+            unwrapped_model = accelerator.unwrap_model(model)
+            unwrapped_model.save_pretrained(intermediate_dir)
+            feature_extractor.save_pretrained(intermediate_dir)
+            prompt_tokenizer.save_pretrained(intermediate_dir)
+
+            rotate_checkpoints(
+                training_args.save_total_limit, output_dir=training_args.output_dir, logger=logger
+            )
+
+            if step == total_train_steps:
+                # un-wrap student model for save
+                unwrapped_model.save_pretrained(training_args.output_dir)
+
+            if training_args.push_to_hub:
+                api.upload_folder(
+                    repo_id=repo_id,
+                    folder_path=training_args.output_dir,
+                    commit_message=f"Saving train state of step {step}",
+                    run_as_future=True,
+                )
+        accelerator.wait_for_everyone()
+
     model.train()
 
     total_batched_samples = resume_step if resume_step is not None else 0
@@ -1092,36 +1125,13 @@ def main():
             ## save checkpoint and weights after each save_steps and at the end of training
             #if (cur_step % training_args.save_steps == 0) or cur_step == total_train_steps:
 
-            # save checkpoint and weights at the end of each epoch and at the end of training
-            if (update_step == total_updates - 1) or cur_step == total_train_steps:
-                intermediate_dir = os.path.join(training_args.output_dir, f"checkpoint-{cur_step}-epoch-{epoch}")
-                # safe_serialization=False to avoid shared tensors saving issue (TODO(YL): it's a temporary fix)
-                # https://github.com/huggingface/transformers/issues/27293#issuecomment-1872560074
-                accelerator.save_state(output_dir=intermediate_dir, safe_serialization=False)
-                accelerator.wait_for_everyone()
-
-                if accelerator.is_main_process:
-                    unwrapped_model = accelerator.unwrap_model(model)
-                    unwrapped_model.save_pretrained(intermediate_dir)
-                    feature_extractor.save_pretrained(intermediate_dir)
-                    prompt_tokenizer.save_pretrained(intermediate_dir)
-
-                    rotate_checkpoints(
-                        training_args.save_total_limit, output_dir=training_args.output_dir, logger=logger
-                    )
-
-                    if cur_step == total_train_steps:
-                        # un-wrap student model for save
-                        unwrapped_model.save_pretrained(training_args.output_dir)
-
-                    if training_args.push_to_hub:
-                        api.upload_folder(
-                            repo_id=repo_id,
-                            folder_path=training_args.output_dir,
-                            commit_message=f"Saving train state of step {cur_step}",
-                            run_as_future=True,
-                        )
-                accelerator.wait_for_everyone()
+            # save checkpoint and weights after each save_steps and at the end of training
+            if training_args.save_steps is not None and (cur_step % training_args.save_steps == 0 or cur_step == total_train_steps):
+                save_checkpoint(epoch, cur_step)
+            elif training_args.save_epochs is not None and (epoch + 1) % training_args.save_epochs == 0:
+                save_checkpoint(epoch, cur_step)
+            elif cur_step == total_train_steps:
+                save_checkpoint(epoch, cur_step)
 
             if training_args.do_eval and (cur_step % eval_steps == 0 or cur_step == total_train_steps):
                 train_time += time.time() - train_start

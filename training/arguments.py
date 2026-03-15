@@ -368,7 +368,11 @@ class ParlerTTSTrainingArguments(Seq2SeqTrainingArguments):
                 "value as `eval_steps` if not set. Should be an integer and a multiple of `eval_steps`."
             )
         },
-    )       
+    )
+    save_epochs: Optional[int] = field(
+        default=None,
+        metadata={"help": "If set, will save a checkpoint every `save_epochs` epochs."},
+    )
     codebook_weights: Optional[List[float]] = field(
         default=None,
         metadata={"help": "Weights applied to each codebook."},
