@@ -373,6 +373,10 @@ class ParlerTTSTrainingArguments(Seq2SeqTrainingArguments):
         default=None,
         metadata={"help": "If set, will save a checkpoint every `save_epochs` epochs."},
     )
+    save_inference_only_checkpoints: bool = field(
+        default=False,
+        metadata={"help": "If set, intermediate checkpoints will only be saved for inference, not for resuming training."},
+    )
     codebook_weights: Optional[List[float]] = field(
         default=None,
         metadata={"help": "Weights applied to each codebook."},

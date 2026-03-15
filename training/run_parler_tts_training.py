@@ -1008,7 +1008,8 @@ def main():
         intermediate_dir = os.path.join(training_args.output_dir, f"checkpoint-{step}-epoch-{epoch}")
         # safe_serialization=False to avoid shared tensors saving issue (TODO(YL): it's a temporary fix)
         # https://github.com/huggingface/transformers/issues/27293#issuecomment-1872560074
-        accelerator.save_state(output_dir=intermediate_dir, safe_serialization=False)
+        if not training_args.save_inference_only_checkpoints or step == total_train_steps:
+            accelerator.save_state(output_dir=intermediate_dir, safe_serialization=False)
         accelerator.wait_for_everyone()
 
         if accelerator.is_main_process:
