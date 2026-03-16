@@ -1135,12 +1135,19 @@ def main():
             ## save checkpoint and weights after each save_steps and at the end of training
             #if (cur_step % training_args.save_steps == 0) or cur_step == total_train_steps:
 
-            # save checkpoint and weights after each save_steps and at the end of training
-            if training_args.save_steps is not None and (cur_step % training_args.save_steps == 0 or cur_step == total_train_steps):
-                save_checkpoint(epoch, cur_step)
-            elif training_args.save_epochs is not None and (epoch + 1) % training_args.save_epochs == 0:
-                save_checkpoint(epoch, cur_step)
-            elif cur_step == total_train_steps:
+            # Determine if a checkpoint should be saved
+            should_save = False
+            # 1. Save at step interval
+            if training_args.save_steps is not None and cur_step > 0 and cur_step % training_args.save_steps == 0:
+                should_save = True
+            # 2. Save at epoch interval (only at the end of the epoch)
+            if training_args.save_epochs is not None and (epoch + 1) % training_args.save_epochs == 0 and update_step == total_updates - 1:
+                should_save = True
+            # 3. Always save at the very end of training
+            if cur_step == total_train_steps:
+                should_save = True
+
+            if should_save:
                 save_checkpoint(epoch, cur_step)
 
             if training_args.do_eval and (cur_step % eval_steps == 0 or cur_step == total_train_steps):
